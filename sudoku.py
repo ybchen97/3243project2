@@ -5,11 +5,6 @@ import random
 # Running script: given code can be run with the command:
 # python file.py, ./path/to/init_state.txt ./output/output.txt
 
-# Globals constants
-ROW = 0
-COL = 1
-BOX = 2
-
 class Sudoku(object):
     """
     DATA STRUCTURES USED IN THIS SOLVER
@@ -19,6 +14,11 @@ class Sudoku(object):
     variable. If the variable is assigned, then the domain value will be 0
     instead of a list.
     """
+
+    # Constants
+    ROW = 0
+    COL = 1
+    BOX = 2
 
     def __init__(self, puzzle):
         # you may add more attributes if you need
@@ -46,8 +46,8 @@ class Sudoku(object):
 
         # HEURISTIC HERE
         var = self.select_unassigned_variable(state)
-        var_row = var[ROW]
-        var_col = var[COL]
+        var_row = var[self.ROW]
+        var_col = var[self.COL]
         domain = domains[var_row][var_col]
 
         # HEURISTIC HERE
@@ -110,17 +110,17 @@ class Sudoku(object):
 
     def is_legal_assignment(self, value, var, state):
         # check row constraints
-        for other_num in state[var[ROW]]:
+        for other_num in state[var[self.ROW]]:
             if other_num == value:
                 return False
 
         # check col constraints
         for index in range(9):
-            if state[index][var[COL]] == value:
+            if state[index][var[self.COL]] == value:
                 return False
 
         # check box constraints
-        box = var[BOX]
+        box = var[self.BOX]
         box_row = box // 3
         box_col = box % 3
 
@@ -161,7 +161,7 @@ class Sudoku(object):
         Returns the reduced domain after checking row constraints
         """
         new_domain = copy.copy(domain)
-        row = var[ROW]
+        row = var[self.ROW]
         for val in state[row]:
             if val == 0:
                 continue
@@ -176,7 +176,7 @@ class Sudoku(object):
         Returns the reduced domain after checking col constraints
         """
         new_domain = copy.copy(domain)
-        col = var[COL]
+        col = var[self.COL]
         for row in range(9):
             val = state[row][col]
             if val == 0:
@@ -192,7 +192,7 @@ class Sudoku(object):
         Returns the reduced domain after checking box constraints
         """
         new_domain = copy.copy(domain)
-        box = var[BOX]
+        box = var[self.BOX]
         box_row = box // 3
         box_col = box % 3
 
