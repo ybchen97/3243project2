@@ -106,7 +106,7 @@ class Sudoku(object):
             return state
 
         # HEURISTIC HERE
-        var = self.select_unassigned_variable(state, domains, tracker, 1)
+        var = self.select_unassigned_variable(state, domains, tracker, 2)
         var_row = var[self.ROW]
         var_col = var[self.COL]
         tracker.remove(var_row, var_col) #update tracker here 
@@ -180,12 +180,19 @@ class Sudoku(object):
                     col_num = unassigned_variable[1]
                     num_constrains = len(tracker.get_neighbours(row_num, col_num))
                     if (num_constrains > max_num_constrains):
-                        most_constraining_var = (row_num, col_num);
+                        print("old most constraining var: " + str(most_constraining_var) + ", num constraints: " + str(max_num_constrains))
+                        print("old number of constraints: " + str(max_num_constrains) + " new number of constraints: " + str(num_constrains))
+                        most_constraining_var = (row_num, col_num); 
                         max_num_constrains = num_constrains
+                        print("new most constraining var: " + str(most_constraining_var) +  ", num_constraints: " + str(max_num_constrains))
                     elif (num_constrains == max_num_constrains):
-                        if len(domains[row_num][col_num]) > len(domains[most_constraining_var[0]][most_constraining_var[1]]):
-                            most_constraining_var = (row_num, col_num); 
-                return (row_num, col_num, self.get_box(row_num, col_num))
+                        print("equalling constraining, comparing by domain size")
+                        print("old most constraining var: " + str(most_constraining_var) + ", size of domain: " + str(len(domains[most_constraining_var[0]][most_constraining_var[1]])))
+                        if len(domains[row_num][col_num]) < len(domains[most_constraining_var[0]][most_constraining_var[1]]):
+                            most_constraining_var = (row_num, col_num);
+                        print("new most constraining var: " + str(most_constraining_var) + ", size of domain: " + str(len(domains[most_constraining_var[0]][most_constraining_var[1]])))
+                print("most constraining var chosen: " + str(most_constraining_var))
+                return (most_constraining_var[0], most_constraining_var[1], self.get_box(most_constraining_var[0], most_constraining_var[1]))
             
     def order_domain_values(self, domains, var, tracker, index):
         """
@@ -294,7 +301,7 @@ class Sudoku(object):
                     most_constrained_vars = [(row, col)]
                     min_domain_size = domain_size
         tracker.set_most_constrained_vars(most_constrained_vars)
-        print("most_constrained_vars: " + str(most_constrained_vars))
+        #print("most_constrained_vars: " + str(most_constrained_vars))
         return domains
 
     def check_row(self, var, domain, state, domain_size):
