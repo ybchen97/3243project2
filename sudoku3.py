@@ -64,6 +64,16 @@ class Tracker(object):
                 var_set.add(coordinates)
         return var_set
 
+    #build set of edges
+    def get_edges(self):
+        edge_set = set();#set of edges used in AC3.
+        for row in self.row_tracker:
+            for unassigned_var in row:
+                neighbours = self.get_neighbours(unassigned_var[0], unassigned_var[1])
+                for neighbour in neighbours:
+                    if (neighbour != unassigned_var):
+                        edge_set.add((unassigned_var, neighbour))
+        return edge_set
         
 class Sudoku(object):
     """
@@ -84,21 +94,73 @@ class Sudoku(object):
         # you may add more attributes if you need
         self.puzzle = puzzle # self.puzzle is a list of lists
         
-    def solve(self):
+    def solve(self, index):
+        """ index == 0 => forward checking with back tracking
+            index == 1 => AC3"""
         # initialise tracker
         tracker = Tracker(self.puzzle)
         domains = self.init_domains(self.puzzle, tracker)
         # check what the initial domains look like
         self.check_initial_domain(domains)
         state = copy.deepcopy(self.puzzle)
+        ans = None
+        if index == 0:
+            ans = self.run_back_tracking(state, domains, tracker)
+        elif index == 1:
+            print("domains before AC3: " + str(domains))
+            if (self.AC3(state, domains, tracker)):
+                print("solution exists")
+                print("domains after AC3: " + str(domains))
+                ans = self.run_back_tracking(state, domains, tracker) 
+            else:
+                print("No solution found.")
 
-        ans = self.run_back_tracking(state, domains, tracker)
-
+            
         # check final ans
-        for row in ans:
-            print row
+        if ans is None:
+            return self.puzzle
+        else:
+            for row in ans:
+                print row
 
-        return ans
+            return ans
+
+    """ Returns true if arc-consistent list of domains exists. Otherwise, returns false"""
+    def AC3(self, state, domains, tracker):
+        print("AC3 running")
+        edge_set = tracker.get_edges()
+        print("Number of edges: " + str(len(edge_set)))
+        while len(edge_set) != 0:
+            edge = edge_set.pop()
+            #print(edge)
+            var1 = edge[0]
+            var2 = edge[1]
+            if self.revise(domains, var1, var2):
+                if len(domains[var1[self.ROW]][var1[self.COL]]) == 0: #domain empty
+                    return False #no satisfiable configuration
+                else:
+                    for neighbour in tracker.get_neighbours(edge[0][self.ROW], edge[0][self.COL]):
+                        if neighbour != var1:
+                            edge_set.add((neighbour, var1))
+        return True;
+
+    "Returns true if changes made to domain of var1"
+    def revise(self, domains, var1, var2):
+        domain1 = domains[var1[self.ROW]][var1[self.COL]]
+        domain2 = domains[var2[self.ROW]][var2[self.COL]]
+        isChanged = False
+        for value1 in domain1:
+            #check if there exists a value in domain2 that satisfies the constraint between var and var2, given a value in domain1.
+            satisfies_constraint = False
+            for value2 in domain2:
+                if value1 != value2:
+                    satisfies_constraint = True
+                    break
+            if not satisfies_constraint:
+                domain1.remove(value1)
+                print("value:  " + str(value1) + "removed from domain of: " + str(var1)) #Used to keep tarck of values pruned/ effectiveness of AC3.
+                isChanged = True
+        return isChanged
 
     def run_back_tracking(self, state, domains, tracker):
         initial_domain = domains
@@ -115,18 +177,18 @@ class Sudoku(object):
         sorted_domain = self.order_domain_values(domains, var, tracker, 1)
         iter = 0 #test if iteration of sorted_domain is sequential. To be removed.
         for value in sorted_domain:
-            print("var selected: (" + str(var_row) + "," + str(var_col) + ")")
+            """print("var selected: (" + str(var_row) + "," + str(var_col) + ")")
             print("domain: " + str(domains[var_row][var_col]))
             print("sorted domain: " + str(sorted_domain))
-            print("iter: " + str(iter))
+            print("iter: " + str(iter))"""
             iter += 1
-            print("value assigned: " + str(value))
-            print("tracker: " + str(tracker.get_unassigned_vars()))
+            """print("value assigned: " + str(value))
+            print("tracker: " + str(tracker.get_unassigned_vars()))"""
             if self.is_legal_assignment(value, var, state):
                 state[var_row][var_col] = value
-                for i in range(9):
+                """for i in range(9):
                     print(state[i])
-                print()
+                print()"""
                 # inferences return new list of domains
                 # HEURISTIC HERE
                 new_domains = self.inference(state, domains, var, tracker)
@@ -294,7 +356,7 @@ class Sudoku(object):
                     most_constrained_vars = [(row, col)]
                     min_domain_size = domain_size
         tracker.set_most_constrained_vars(most_constrained_vars)
-        print("most_constrained_vars: " + str(most_constrained_vars))
+        #print("most_constrained_vars: " + str(most_constrained_vars))
         return domains
 
     def check_row(self, var, domain, state, domain_size):
@@ -403,7 +465,7 @@ if __name__ == "__main__":
                     j = 0
 
     sudoku = Sudoku(puzzle)
-    ans = sudoku.solve()
+    ans = sudoku.solve(1)
     with open(sys.argv[2], 'a') as f:
         for i in range(9):
             for j in range(9):
