@@ -5,7 +5,7 @@ School project to create solvers for the Sudoku puzzle (CSP) and Pacman
 
 ## How to use
 
-```
+```shell
 chmod +x runner.py
 ./runner.py sudoku.py 1
 ```
