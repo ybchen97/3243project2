@@ -123,7 +123,9 @@ class Sudoku(object):
         For now just randomly sort the domain
         """
         if self.value_heuristic == self.RANDOM_SHUFFLE:
-            return random.shuffle(domains[var[self.ROW]][var[self.COL]])
+            new_domain = domains[var[self.ROW]][var[self.COL]]
+            random.shuffle(new_domain)
+            return new_domain
         elif self.value_heuristic == self.LEAST_CONSTRAINING_VAL:
             return self.least_constraining_value(state, domains, var)
 
@@ -147,6 +149,8 @@ class Sudoku(object):
             for neighbour in neighbours:
                 row, col = neighbour
                 neighbour_domain = domains[row][col]
+                # TODO: Something interesting to note, it becomes slower if 'not' is not included
+                # Current implementation is actually most constraining value...
                 if value not in neighbour_domain:
                     conflicts += 1
             sorted_domain.append((value, conflicts))
