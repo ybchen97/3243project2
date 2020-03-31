@@ -2,3 +2,10 @@
 
 School project to create solvers for the Sudoku puzzle (CSP) and Pacman
 (Q-Learning).
+
+## How to use
+
+```
+chmod +x runner.py
+./runner.py sudoku.py 1
+```
