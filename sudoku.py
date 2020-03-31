@@ -1,9 +1,11 @@
 import sys
 import copy
 import random
+from collections import deque
 
 # Running script: given code can be run with the command:
 # python file.py, ./path/to/init_state.txt ./output/output.txt
+
 
 class Sudoku(object):
     """
@@ -18,84 +20,246 @@ class Sudoku(object):
     # Constants
     ROW = 0
     COL = 1
-    BOX = 2
+
+    # Variable heuristics
+    FIRST_UNASSIGNED_VAR = 0
+    MOST_CONSTRAINED_VAR = 1
+
+    # Value heuristics
+    RANDOM_SHUFFLE = 0
+    LEAST_CONSTRAINING_VAL = 1
+
+    # Inference heuristics
+    FORWARD_CHECKING = 0
+    AC3 = 1
 
     def __init__(self, puzzle):
         # you may add more attributes if you need
-        self.puzzle = puzzle # self.puzzle is a list of lists
+        self.puzzle = puzzle  # self.puzzle is a list of lists
+        self.variable_heuristic = self.MOST_CONSTRAINED_VAR
+        self.value_heuristic = self.LEAST_CONSTRAINING_VAL
+        self.inference_heuristic = self.AC3
 
     def solve(self):
-        domains = self.init_domains(self.puzzle)
+        domains = self.get_initial_domains(self.puzzle)
 
-        # check what the initial domains look like
-        self.check_initial_domain(domains)
+        # self.check_domains(self.puzzle, domains)
         state = copy.deepcopy(self.puzzle)
 
         ans = self.run_back_tracking(state, domains)
 
-        # check final ans
-        for row in ans:
-            print row
+        if ans is None:
+            return "Did not solve :("
 
         return ans
 
     def run_back_tracking(self, state, domains):
-        initial_domain = domains
+        # self.check_domains(state, domains)
         if self.is_goal_state(state):
             return state
 
-        # HEURISTIC HERE
-        var = self.select_unassigned_variable(state)
-        var_row = var[self.ROW]
-        var_col = var[self.COL]
-        domain = domains[var_row][var_col]
+        # VARIABLE HEURISTIC HERE
+        var = self.select_unassigned_variable(state, domains)
+        var_row, var_col = var
+        # print("Variable to assign next: {}".format(var))
 
-        # HEURISTIC HERE
-        sorted_domain = self.order_domain_values(state, domain)
+        # VALUE HEURISTIC HERE
+        sorted_domain = self.order_domain_values(state, domains, var)
+        # print("Values to try: {}".format(sorted_domain))
 
         for value in sorted_domain:
+            # print("Value: {}".format(value))
             if self.is_legal_assignment(value, var, state):
                 state[var_row][var_col] = value
 
-                # inferences return new list of domains
-                # HEURISTIC HERE
+                # INFERENCE HEURISTIC HERE
                 new_domains = self.inference(state, domains, var)
 
-                if new_domains != None:
+                if new_domains is not None:
                     result = self.run_back_tracking(state, new_domains)
 
-                    if result != None:
+                    if result is not None:
                         return result
 
             state[var_row][var_col] = 0
-            domains = initial_domain
 
         return None
 
-    def select_unassigned_variable(self, state):
+    def select_unassigned_variable(self, state, domains):
         """
-        For now just select first unassigned variable
+        FIRST_UNASSIGNED_VAR returns the first unassigned variable
+        MOST_CONSTRAINED_VAR returns the most constrained variable
+        """
+        if self.variable_heuristic == self.FIRST_UNASSIGNED_VAR:
+            return self.first_unassigned(state)
+        elif self.variable_heuristic == self.MOST_CONSTRAINED_VAR:
+            return self.most_constrained_variable(state, domains)
+
+    def first_unassigned(self, state):
+        """
+        Returns first unassigned variable
         """
         for row in range(9):
             for col in range(9):
                 if state[row][col] == 0:
-                    box = self.get_box(row, col)
-                    return (row, col, box)
+                    return (row, col)
 
-    def order_domain_values(self, state, domain):
+    def most_constrained_variable(self, state, domains):
+        """
+        Returns unassigned variable with smallest domain
+        """
+        result = (0, 0)
+        min_domain_length = 10
+        for row in range(9):
+            for col in range(9):
+                domain = domains[row][col]
+                if state[row][col] == 0 and len(domain) < min_domain_length:
+                    result = (row, col)
+                    min_domain_length = len(domain)
+        return result
+
+    def order_domain_values(self, state, domains, var):
         """
         For now just randomly sort the domain
         """
-        random.shuffle(domain)
-        return domain
+        if self.value_heuristic == self.RANDOM_SHUFFLE:
+            return random.shuffle(domains[var[self.ROW]][var[self.COL]])
+        elif self.value_heuristic == self.LEAST_CONSTRAINING_VAL:
+            return self.least_constraining_value(state, domains, var)
+
+    def count_valid_values(self, neighbour_domain, value):
+        count = 0
+        for val in neighbour_domain:
+            if val != value:
+                count += 1
+        return count
+
+    def least_constraining_value(self, state, domains, var):
+        """
+        Returns domain sorted by least conflicts
+        """
+        row, col = var
+        domain = domains[row][col]
+        sorted_domain = []
+        neighbours = self.get_unassigned_neighbours(var, state)
+        for value in domain:
+            conflicts = 0
+            for neighbour in neighbours:
+                row, col = neighbour
+                neighbour_domain = domains[row][col]
+                if value not in neighbour_domain:
+                    conflicts += 1
+            sorted_domain.append((value, conflicts))
+
+        sorted_domain = sorted(sorted_domain, key=lambda tup: tup[1])
+        return [tup[0] for tup in sorted_domain]
+
+    def get_unassigned_neighbours(self, var, state, get_all_neighbours=False):
+        """
+        Returns a list of neighbours or all unassigned neighbours of var
+        """
+        neighbours = []
+        row, col = var
+
+        if get_all_neighbours:
+            # Neighbours in row and col
+            for i in range(9):
+                if i != col:
+                    neighbours.append((row, i))
+                if i != row:
+                    neighbours.append((i, col))
+
+            # Neighbours in box
+            box_row = (row // 3) * 3
+            box_col = (col // 3) * 3
+
+            for i in range(box_row, box_row+3):
+                for j in range(box_col, box_col+3):
+                    # Not same row AND not same col to prevent double counting from above
+                    if i != row and j != col:
+                        neighbours.append((i, j))
+
+        else:
+            # Neighbours in row and col
+            for i in range(9):
+                if state[row][i] == 0 and i != col:
+                    neighbours.append((row, i))
+                if state[i][col] == 0 and i != row:
+                    neighbours.append((i, col))
+
+            # Neighbours in box
+            box_row = (row // 3) * 3
+            box_col = (col // 3) * 3
+
+            for i in range(box_row, box_row+3):
+                for j in range(box_col, box_col+3):
+                    # Not same row AND not same col to prevent double counting from above
+                    if state[i][j] == 0 and (i != row and j != col):
+                        neighbours.append((i, j))
+
+        return neighbours
+
+    def get_unassigned_variables(self, state):
+        unassigned_variables = []
+        for row in range(9):
+            for col in range(9):
+                if state[row][col] == 0:
+                    unassigned_variables.append((row, col))
+        return unassigned_variables
 
     def inference(self, state, domains, var):
         """
         For now just remove the domain of the current var and return the new
         domains. NOTE: DEEPCOPY THE DOMAIN!!
         """
-        new_domains = self.init_domains(state)
-        return new_domains
+        if self.inference_heuristic == self.FORWARD_CHECKING:
+            # TODO: issue here due to bug with init_domains
+            return self.init_domains(state)
+        elif self.inference_heuristic == self.AC3:
+            row, col = var
+            new_domains = copy.deepcopy(domains)
+            new_domains[row][col] = [state[row][col]]
+            new_domains = self.ac3(state, new_domains)
+            return new_domains
+
+    def ac3(self, state, domains):
+        # initialize queue of arcs
+        queue = deque()
+        unassigned_var = self.get_unassigned_variables(state)
+        for x in unassigned_var:
+            neighbours = self.get_unassigned_neighbours(x, state, get_all_neighbours=True)
+            for y in neighbours:
+                queue.append((x, y))
+
+        while len(queue) > 0:
+            x, y = queue.popleft()
+            # print("x: {} y: {}".format(x, y))
+            if self.revise(domains, x, y):
+                # self.check_domains(state, domains)
+                if len(domains[x[self.ROW]][x[self.COL]]) == 0:
+                    # print("({},{})'s domain is gone".format(x[self.ROW], x[self.COL]))
+                    return None
+                neighbours = self.get_unassigned_neighbours(x, state, get_all_neighbours=True)
+                neighbours.remove(y)
+                for neighbour in neighbours:
+                    queue.append((neighbour, x))
+        return domains
+
+    def revise(self, domains, x, y):
+        revised = False
+        x_domain = domains[x[self.ROW]][x[self.COL]]
+        # print("Var {}'s domain: {}".format(x, x_domain))
+        for x_val in x_domain:
+            y_domain = domains[y[self.ROW]][y[self.COL]]
+            has_diff_val = False
+            for y_val in y_domain:
+                if x_val != y_val:
+                    has_diff_val = True
+                    break
+            if not has_diff_val:
+                x_domain.remove(x_val)
+                revised = True
+        return revised
 
     def is_goal_state(self, state):
         """
@@ -109,28 +273,38 @@ class Sudoku(object):
         return True
 
     def is_legal_assignment(self, value, var, state):
+        row, col = var
         # check row constraints
-        for other_num in state[var[self.ROW]]:
-            if other_num == value:
+        for i in range(9):
+            if state[row][i] == value:
                 return False
 
         # check col constraints
-        for index in range(9):
-            if state[index][var[self.COL]] == value:
+        for i in range(9):
+            if state[i][col] == value:
                 return False
 
         # check box constraints
-        box = var[self.BOX]
-        box_row = box // 3
-        box_col = box % 3
+        box_row = (row // 3) * 3
+        box_col = (col // 3) * 3
 
-        for row in range(box_row*3, box_row*3+3):
-            for col in range(box_col*3, box_col*3+3):
+        for row in range(box_row, box_row+3):
+            for col in range(box_col, box_col+3):
                 if value == state[row][col]:
                     return False
 
         return True
 
+    def get_initial_domains(self, state):
+        initial_domains = [[[1,2,3,4,5,6,7,8,9] for i in range(9)] for j in range(9)]
+        for row in range(9):
+            for col in range(9):
+                if state[row][col] != 0:
+                    initial_domains[row][col] = [state[row][col]]
+        return initial_domains
+
+    # TODO: There is some problem with this function, USE WITH CAUTION.
+    # Timing is increased by 7 seconds if this function is used
     def init_domains(self, state):
         """
         Returns the domains of a particular state
@@ -142,25 +316,28 @@ class Sudoku(object):
         # domain accordingly
         for row in range(9):
             for col in range(9):
-                var = (row, col, self.get_box(row,col))
+                var = (row, col)
                 val = state[row][col]
                 if val != 0:
-                    domains[row][col] = 0 # assign domain value 0 if variable is assigned
+                    # domains[row][col] = 0  # assign domain value 0 if variable is assigned
+                    domains[row][col] = [val]  # assign domain to be assigned value if variable is assigned
                     continue
 
                 domain = domains[row][col]
                 domain = self.check_row(var, domain, state)
                 domain = self.check_col(var, domain, state)
                 domain = self.check_box(var, domain, state)
+                if len(domain) == 0:
+                    return None
                 domains[row][col] = domain
-        
+
         return domains
 
     def check_row(self, var, domain, state):
         """
         Returns the reduced domain after checking row constraints
         """
-        new_domain = copy.copy(domain)
+        new_domain = copy.deepcopy(domain)
         row = var[self.ROW]
         for val in state[row]:
             if val == 0:
@@ -175,7 +352,7 @@ class Sudoku(object):
         """
         Returns the reduced domain after checking col constraints
         """
-        new_domain = copy.copy(domain)
+        new_domain = copy.deepcopy(domain)
         col = var[self.COL]
         for row in range(9):
             val = state[row][col]
@@ -191,13 +368,13 @@ class Sudoku(object):
         """
         Returns the reduced domain after checking box constraints
         """
-        new_domain = copy.copy(domain)
-        box = var[self.BOX]
-        box_row = box // 3
-        box_col = box % 3
+        new_domain = copy.deepcopy(domain)
+        row, col = var
+        box_row = (row // 3) * 3
+        box_col = (col // 3) * 3
 
-        for row in range(box_row*3, box_row*3+3):
-            for col in range(box_col*3, box_col*3+3):
+        for row in range(box_row, box_row+3):
+            for col in range(box_col, box_col+3):
                 val = state[row][col]
                 if val == 0:
                     continue
@@ -207,21 +384,12 @@ class Sudoku(object):
                     pass
         return new_domain
 
-    def get_box(self, row, col):
-        """
-        Get box number from row and col indices. Box number range from 0-8
-        """
-        box_row = row // 3
-        box_col = col // 3
-        box = box_row * 3 + box_col
-        return box
-
-    def check_initial_domain(self, domains):
-        print("Starting state:\n")
+    def check_domains(self, state, domains):
+        print("State:\n")
         for i in range(9):
-            print(self.puzzle[i])
+            print(state[i])
         
-        print("\nStarting domains:\n")
+        print("\nDomains:\n")
         for i in range(9):
             row = ""
             for j in range(9):
