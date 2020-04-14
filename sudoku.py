@@ -3,6 +3,7 @@ import copy
 import random
 from collections import deque
 
+
 # Running script: given code can be run with the command:
 # python file.py, ./path/to/init_state.txt ./output/output.txt
 
@@ -38,15 +39,17 @@ class Sudoku(object):
         self.puzzle = puzzle  # self.puzzle is a list of lists
         self.variable_heuristic = self.MOST_CONSTRAINED_VAR
         self.value_heuristic = self.LEAST_CONSTRAINING_VAL
-        self.inference_heuristic = self.AC3
+        self.inference_heuristic = self.FORWARD_CHECKING
+        self.count = 0
 
     def solve(self):
-        domains = self.get_initial_domains(self.puzzle)
+        domains = self.get_initial_fc_domains(self.puzzle)
 
-        # self.check_domains(self.puzzle, domains)
+        # self.print_domains(self.puzzle, domains)
         state = copy.deepcopy(self.puzzle)
 
         ans = self.run_back_tracking(state, domains)
+        print("Backtrack called {} times".format(self.count))
 
         if ans is None:
             return "Did not solve :("
@@ -54,7 +57,8 @@ class Sudoku(object):
         return ans
 
     def run_back_tracking(self, state, domains):
-        # self.check_domains(state, domains)
+        self.count += 1
+        # self.print_domains(state, domains)
         if self.is_goal_state(state):
             return state
 
@@ -71,20 +75,141 @@ class Sudoku(object):
             # print("Value: {}".format(value))
             if self.is_legal_assignment(value, var, state):
                 state[var_row][var_col] = value
+                # values_removed contains the values that were removed from each variable's domains during inference
+                # Original domains is retrieved by taking the union of this set and the modified domains
+                values_removed = {(var_row, var_col): domains[var_row][var_col]}
+                domains[var_row][var_col] = {value}
 
                 # INFERENCE HEURISTIC HERE
-                new_domains = self.inference(state, domains, var)
-
-                if new_domains is not None:
-                    result = self.run_back_tracking(state, new_domains)
+                # self.inference directly modifies domains
+                if self.inference(state, domains, var, value, values_removed) is not None:
+                    result = self.run_back_tracking(state, domains)
 
                     if result is not None:
                         return result
+
+                # Restore original domains
+                self.restore_domains(domains, values_removed)
 
             state[var_row][var_col] = 0
 
         return None
 
+    """
+    UTILITY FUNCTIONS
+    """
+    def restore_domains(self, domains, values_removed):
+        for key in values_removed:
+            row = key[self.ROW]
+            col = key[self.COL]
+            # Union of sets to restore the original domain
+            domains[row][col] |= values_removed[key]
+
+    def get_unassigned_neighbours(self, var, state, get_all_neighbours=False):
+        """
+        Returns a list of neighbours or all unassigned neighbours of var
+        """
+        neighbours = []
+        row, col = var
+
+        if get_all_neighbours:
+            # Neighbours in row and col
+            for i in range(9):
+                if i != col:
+                    neighbours.append((row, i))
+                if i != row:
+                    neighbours.append((i, col))
+
+            # Neighbours in box
+            box_row = (row // 3) * 3
+            box_col = (col // 3) * 3
+
+            for i in range(box_row, box_row + 3):
+                for j in range(box_col, box_col + 3):
+                    # Not same row AND not same col to prevent double counting from above
+                    if i != row and j != col:
+                        neighbours.append((i, j))
+
+        else:
+            # Neighbours in row and col
+            for i in range(9):
+                if state[row][i] == 0 and i != col:
+                    neighbours.append((row, i))
+                if state[i][col] == 0 and i != row:
+                    neighbours.append((i, col))
+
+            # Neighbours in box
+            box_row = (row // 3) * 3
+            box_col = (col // 3) * 3
+
+            for i in range(box_row, box_row + 3):
+                for j in range(box_col, box_col + 3):
+                    # Not same row AND not same col to prevent double counting from above
+                    if state[i][j] == 0 and (i != row and j != col):
+                        neighbours.append((i, j))
+
+        return neighbours
+
+    def get_unassigned_variables(self, state):
+        unassigned_variables = []
+        for row in range(9):
+            for col in range(9):
+                if state[row][col] == 0:
+                    unassigned_variables.append((row, col))
+        return unassigned_variables
+
+    def is_goal_state(self, state):
+        """
+        Simple check to see if all variables are assigned. If a variable has
+        value 0, then there are still unassigned variables.
+        """
+        for row in state:
+            min_value = min(row)
+            if min_value == 0:
+                return False
+        return True
+
+    def is_legal_assignment(self, value, var, state):
+        row, col = var
+        # check row and col constraints
+        for i in range(9):
+            # Note: variable is not yet assigned during this function call
+            if state[row][i] == value or state[i][col] == value:
+                return False
+
+        # check box constraints
+        box_row = (row // 3) * 3
+        box_col = (col // 3) * 3
+
+        for row in range(box_row, box_row + 3):
+            for col in range(box_col, box_col + 3):
+                if value == state[row][col]:
+                    return False
+
+        return True
+
+    def get_initial_domains(self, state):
+        initial_domains = [[{1, 2, 3, 4, 5, 6, 7, 8, 9} for i in range(9)] for j in range(9)]
+        for row in range(9):
+            for col in range(9):
+                if state[row][col] != 0:
+                    initial_domains[row][col] = {state[row][col]}
+        return initial_domains
+
+    def get_initial_fc_domains(self, state):
+        initial_domains = [[{1, 2, 3, 4, 5, 6, 7, 8, 9} for i in range(9)] for j in range(9)]
+        for row in range(9):
+            for col in range(9):
+                var = (row, col)
+                val = state[row][col]
+                if val != 0:
+                    initial_domains[row][col] = {val}
+                    self.forward_checking(initial_domains, var, val, {})
+        return initial_domains
+
+    """
+    Variable Heuristics
+    """
     def select_unassigned_variable(self, state, domains):
         """
         FIRST_UNASSIGNED_VAR returns the first unassigned variable
@@ -118,23 +243,19 @@ class Sudoku(object):
                     min_domain_length = len(domain)
         return result
 
+    """
+    Value Heuristics
+    """
     def order_domain_values(self, state, domains, var):
         """
         For now just randomly sort the domain
         """
         if self.value_heuristic == self.RANDOM_SHUFFLE:
             new_domain = domains[var[self.ROW]][var[self.COL]]
-            random.shuffle(new_domain)
+            random.shuffle(list(new_domain))
             return new_domain
         elif self.value_heuristic == self.LEAST_CONSTRAINING_VAL:
             return self.least_constraining_value(state, domains, var)
-
-    def count_valid_values(self, neighbour_domain, value):
-        count = 0
-        for val in neighbour_domain:
-            if val != value:
-                count += 1
-        return count
 
     def least_constraining_value(self, state, domains, var):
         """
@@ -143,87 +264,33 @@ class Sudoku(object):
         row, col = var
         domain = domains[row][col]
         sorted_domain = []
-        neighbours = self.get_unassigned_neighbours(var, state)
+        # Whether we get all neighbours or only unassigned neighbours does not matter to forward checking
+        neighbours = self.get_unassigned_neighbours(var, state, get_all_neighbours=True)
         for value in domain:
             conflicts = 0
             for neighbour in neighbours:
                 row, col = neighbour
                 neighbour_domain = domains[row][col]
-                # TODO: Something interesting to note, it becomes slower if 'not' is not included
-                # Current implementation is actually most constraining value...
-                if value not in neighbour_domain:
+                if value in neighbour_domain:
                     conflicts += 1
             sorted_domain.append((value, conflicts))
 
-        sorted_domain = sorted(sorted_domain, key=lambda tup: tup[1])
-        return [tup[0] for tup in sorted_domain]
+        sorted_domain = sorted(sorted_domain, key=lambda pair: pair[1])
+        return [pair[0] for pair in sorted_domain]
 
-    def get_unassigned_neighbours(self, var, state, get_all_neighbours=False):
-        """
-        Returns a list of neighbours or all unassigned neighbours of var
-        """
-        neighbours = []
-        row, col = var
-
-        if get_all_neighbours:
-            # Neighbours in row and col
-            for i in range(9):
-                if i != col:
-                    neighbours.append((row, i))
-                if i != row:
-                    neighbours.append((i, col))
-
-            # Neighbours in box
-            box_row = (row // 3) * 3
-            box_col = (col // 3) * 3
-
-            for i in range(box_row, box_row+3):
-                for j in range(box_col, box_col+3):
-                    # Not same row AND not same col to prevent double counting from above
-                    if i != row and j != col:
-                        neighbours.append((i, j))
-
-        else:
-            # Neighbours in row and col
-            for i in range(9):
-                if state[row][i] == 0 and i != col:
-                    neighbours.append((row, i))
-                if state[i][col] == 0 and i != row:
-                    neighbours.append((i, col))
-
-            # Neighbours in box
-            box_row = (row // 3) * 3
-            box_col = (col // 3) * 3
-
-            for i in range(box_row, box_row+3):
-                for j in range(box_col, box_col+3):
-                    # Not same row AND not same col to prevent double counting from above
-                    if state[i][j] == 0 and (i != row and j != col):
-                        neighbours.append((i, j))
-
-        return neighbours
-
-    def get_unassigned_variables(self, state):
-        unassigned_variables = []
-        for row in range(9):
-            for col in range(9):
-                if state[row][col] == 0:
-                    unassigned_variables.append((row, col))
-        return unassigned_variables
-
-    def inference(self, state, domains, var):
+    """
+    Inference
+    """
+    def inference(self, state, domains, var, value, values_removed):
         """
         For now just remove the domain of the current var and return the new
         domains. NOTE: DEEPCOPY THE DOMAIN!!
         """
         if self.inference_heuristic == self.FORWARD_CHECKING:
-            # TODO: issue here due to bug with init_domains
-            return self.init_domains(state)
+            return self.forward_checking(domains, var, value, values_removed)
         elif self.inference_heuristic == self.AC3:
             row, col = var
-            new_domains = copy.deepcopy(domains)
-            new_domains[row][col] = [state[row][col]]
-            new_domains = self.ac3(state, new_domains)
+            new_domains = self.ac3(state, domains, values_removed)
             return new_domains
 
     def ac3(self, state, domains):
@@ -239,7 +306,7 @@ class Sudoku(object):
             x, y = queue.popleft()
             # print("x: {} y: {}".format(x, y))
             if self.revise(domains, x, y):
-                # self.check_domains(state, domains)
+                # self.print_domains(state, domains)
                 if len(domains[x[self.ROW]][x[self.COL]]) == 0:
                     # print("({},{})'s domain is gone".format(x[self.ROW], x[self.COL]))
                     return None
@@ -253,7 +320,7 @@ class Sudoku(object):
         revised = False
         x_domain = domains[x[self.ROW]][x[self.COL]]
         # print("Var {}'s domain: {}".format(x, x_domain))
-        for x_val in x_domain:
+        for x_val in set(x_domain):
             y_domain = domains[y[self.ROW]][y[self.COL]]
             has_diff_val = False
             for y_val in y_domain:
@@ -265,134 +332,83 @@ class Sudoku(object):
                 revised = True
         return revised
 
-    def is_goal_state(self, state):
-        """
-        Simple check to see if all variables are assigned. If a variable has
-        value 0, then there are still unassigned variables.
-        """
-        for row in state:
-            min_value = min(row)
-            if min_value == 0:
-                return False
-        return True
-
-    def is_legal_assignment(self, value, var, state):
-        row, col = var
-        # check row constraints
-        for i in range(9):
-            if state[row][i] == value:
-                return False
-
-        # check col constraints
-        for i in range(9):
-            if state[i][col] == value:
-                return False
-
-        # check box constraints
-        box_row = (row // 3) * 3
-        box_col = (col // 3) * 3
-
-        for row in range(box_row, box_row+3):
-            for col in range(box_col, box_col+3):
-                if value == state[row][col]:
-                    return False
-
-        return True
-
-    def get_initial_domains(self, state):
-        initial_domains = [[[1,2,3,4,5,6,7,8,9] for i in range(9)] for j in range(9)]
-        for row in range(9):
-            for col in range(9):
-                if state[row][col] != 0:
-                    initial_domains[row][col] = [state[row][col]]
-        return initial_domains
-
-    # TODO: There is some problem with this function, USE WITH CAUTION.
-    # Timing is increased by 7 seconds if this function is used
-    def init_domains(self, state):
+    def forward_checking(self, domains, var, value, values_removed):
         """
         Returns the domains of a particular state
         """
-        # initialize as a 2d array of lists, representing domain of 1-9
-        domains = [[[i for i in range(1,10)] for j in range(9)] for k in range(9)]
-
-        # for each empty cell, check all 24 constraining neighbours, reduce
-        # domain accordingly
-        for row in range(9):
-            for col in range(9):
-                var = (row, col)
-                val = state[row][col]
-                if val != 0:
-                    # domains[row][col] = 0  # assign domain value 0 if variable is assigned
-                    domains[row][col] = [val]  # assign domain to be assigned value if variable is assigned
-                    continue
-
-                domain = domains[row][col]
-                domain = self.check_row(var, domain, state)
-                domain = self.check_col(var, domain, state)
-                domain = self.check_box(var, domain, state)
-                if len(domain) == 0:
-                    return None
-                domains[row][col] = domain
+        domains = self.check_row(var, domains, value, values_removed)
+        if domains is None:
+            return None
+        domains = self.check_col(var, domains, value, values_removed)
+        if domains is None:
+            return None
+        domains = self.check_box(var, domains, value, values_removed)
+        if domains is None:
+            return None
 
         return domains
 
-    def check_row(self, var, domain, state):
+    def check_row(self, var, domains, value, values_removed):
         """
-        Returns the reduced domain after checking row constraints
+        Returns the reduced domains after checking row constraints
         """
-        new_domain = copy.deepcopy(domain)
-        row = var[self.ROW]
-        for val in state[row]:
-            if val == 0:
-                continue
-            try:
-                new_domain.remove(val)
-            except ValueError:
-                pass
-        return new_domain
+        row, col = var
+        for i in range(9):
+            domain = domains[row][i]
+            if i != col and value in domain:
+                domain.remove(value)
+                if (row, i) not in values_removed:
+                    values_removed[(row, i)] = {value}
+                else:
+                    values_removed[(row, i)].add(value)
+                if len(domain) == 0:
+                    return None
+        return domains
 
-    def check_col(self, var, domain, state):
+    def check_col(self, var, domains, value, values_removed):
         """
-        Returns the reduced domain after checking col constraints
+        Returns the reduced domains after checking col constraints
         """
-        new_domain = copy.deepcopy(domain)
-        col = var[self.COL]
-        for row in range(9):
-            val = state[row][col]
-            if val == 0:
-                continue
-            try:
-                new_domain.remove(val)
-            except ValueError:
-                pass
-        return new_domain
+        row, col = var
+        for i in range(9):
+            domain = domains[i][col]
+            if i != row and value in domain:
+                domain.remove(value)
+                if (i, col) not in values_removed:
+                    values_removed[(i, col)] = {value}
+                else:
+                    values_removed[(i, col)].add(value)
+                if len(domain) == 0:
+                    return None
+        return domains
 
-    def check_box(self, var, domain, state):
+    def check_box(self, var, domains, value, values_removed):
         """
-        Returns the reduced domain after checking box constraints
+        Returns the reduced domains after checking box constraints
         """
-        new_domain = copy.deepcopy(domain)
         row, col = var
         box_row = (row // 3) * 3
         box_col = (col // 3) * 3
 
-        for row in range(box_row, box_row+3):
-            for col in range(box_col, box_col+3):
-                val = state[row][col]
-                if val == 0:
-                    continue
-                try:
-                    new_domain.remove(val)
-                except ValueError:
-                    pass
-        return new_domain
+        for i in range(box_row, box_row + 3):
+            for j in range(box_col, box_col + 3):
+                domain = domains[i][j]
+                if (i, j) != var and value in domain:
+                    domain.remove(value)
+                    if (i, j) not in values_removed:
+                        values_removed[(i, j)] = {value}
+                    else:
+                        values_removed[(i, j)].add(value)
+                    if len(domain) == 0:
+                        return None
 
-    def check_domains(self, state, domains):
+        return domains
+
+    def print_domains(self, state, domains):
         print("State:\n")
         for i in range(9):
             print(state[i])
-        
+
         print("\nDomains:\n")
         for i in range(9):
             row = ""
@@ -404,6 +420,7 @@ class Sudoku(object):
     # However, ensure all the classes/functions are in this file ONLY
     # Note that our evaluation scripts only call the solve method.
     # Any other methods that you write should be used within the solve() method.
+
 
 if __name__ == "__main__":
     # STRICTLY do NOT modify the code in the main function here
