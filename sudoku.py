@@ -38,7 +38,7 @@ class Sudoku(object):
         self.puzzle = puzzle  # self.puzzle is a list of lists
         self.variable_heuristic = self.MOST_CONSTRAINED_VAR
         self.value_heuristic = self.LEAST_CONSTRAINING_VAL
-        self.inference_heuristic = self.AC3
+        self.inference_heuristic = self.FORWARD_CHECKING
         self.neighbours_dict = {}
         self.count = 0
 
@@ -235,7 +235,8 @@ class Sudoku(object):
 
     def most_constrained_variable(self, state, domains):
         """
-        Returns unassigned variable with smallest domain
+        Returns unassigned variable with smallest domain, with most constraining variable
+        as tie break
         """
         results = []
         min_domain_length = 10
@@ -330,6 +331,8 @@ class Sudoku(object):
                 if len(domains[x]) == 0:
                     # print("({},{})'s domain is gone".format(x[self.ROW], x[self.COL]))
                     return None
+
+                # Return new list to prevent mutation of neighbours_dict
                 neighbours = list(self.neighbours_dict[x])
                 neighbours.remove(y)
                 for neighbour in neighbours:
@@ -340,6 +343,7 @@ class Sudoku(object):
         revised = False
         x_domain = domains[x]
         # print("Var {}'s domain: {}".format(x, x_domain))
+        # Return new list to avoid removal while iterating
         for x_val in list(x_domain):
             y_domain = domains[y]
             has_diff_val = False
@@ -352,7 +356,7 @@ class Sudoku(object):
                 if x in values_removed:
                     values_removed[x].add(x_val)
                 else:
-                    values_removed[x] = {x_val}
+                    values_removed[x] = set([x_val])
                 revised = True
         return revised
 
