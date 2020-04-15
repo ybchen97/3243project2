@@ -1,5 +1,4 @@
 import sys
-import copy
 import random
 from collections import deque
 
@@ -39,17 +38,23 @@ class Sudoku(object):
         self.puzzle = puzzle  # self.puzzle is a list of lists
         self.variable_heuristic = self.MOST_CONSTRAINED_VAR
         self.value_heuristic = self.LEAST_CONSTRAINING_VAL
-        self.inference_heuristic = self.FORWARD_CHECKING
+        self.inference_heuristic = self.AC3
+        self.neighbours_dict = {}
         self.count = 0
 
     def solve(self):
+        # Build dictionary of neighbours for each variable
+        for row in range(9):
+            for col in range(9):
+                var = (row, col)
+                self.neighbours_dict[var] = self.get_unassigned_neighbours(var, [], get_all_neighbours=True)
+
+        # Build initial domains
         domains = self.get_initial_fc_domains(self.puzzle)
 
         # self.print_domains(self.puzzle, domains)
-        state = copy.deepcopy(self.puzzle)
-
-        ans = self.run_back_tracking(state, domains)
-        print("Backtrack called {} times".format(self.count))
+        ans = self.run_back_tracking(self.puzzle, domains)
+        print("Backtrack called {0} times".format(self.count))
 
         if ans is None:
             return "Did not solve :("
@@ -68,7 +73,7 @@ class Sudoku(object):
         # print("Variable to assign next: {}".format(var))
 
         # VALUE HEURISTIC HERE
-        sorted_domain = self.order_domain_values(state, domains, var)
+        sorted_domain = self.order_domain_values(domains, var)
         # print("Values to try: {}".format(sorted_domain))
 
         for value in sorted_domain:
@@ -77,8 +82,8 @@ class Sudoku(object):
                 state[var_row][var_col] = value
                 # values_removed contains the values that were removed from each variable's domains during inference
                 # Original domains is retrieved by taking the union of this set and the modified domains
-                values_removed = {(var_row, var_col): domains[var_row][var_col]}
-                domains[var_row][var_col] = {value}
+                values_removed = {var: set(domains[var])}
+                domains[var] = set([value])
 
                 # INFERENCE HEURISTIC HERE
                 # self.inference directly modifies domains
@@ -100,10 +105,8 @@ class Sudoku(object):
     """
     def restore_domains(self, domains, values_removed):
         for key in values_removed:
-            row = key[self.ROW]
-            col = key[self.COL]
             # Union of sets to restore the original domain
-            domains[row][col] |= values_removed[key]
+            domains[key] |= values_removed[key]
 
     def get_unassigned_neighbours(self, var, state, get_all_neighbours=False):
         """
@@ -163,10 +166,10 @@ class Sudoku(object):
         Simple check to see if all variables are assigned. If a variable has
         value 0, then there are still unassigned variables.
         """
-        for row in state:
-            min_value = min(row)
-            if min_value == 0:
-                return False
+        for row in range(9):
+            for col in range(9):
+                if state[row][col] == 0:
+                    return False
         return True
 
     def is_legal_assignment(self, value, var, state):
@@ -189,21 +192,22 @@ class Sudoku(object):
         return True
 
     def get_initial_domains(self, state):
-        initial_domains = [[{1, 2, 3, 4, 5, 6, 7, 8, 9} for i in range(9)] for j in range(9)]
+        initial_domains = {}
         for row in range(9):
             for col in range(9):
                 if state[row][col] != 0:
-                    initial_domains[row][col] = {state[row][col]}
+                    initial_domains[(row, col)] = set([state[row][col]])
+                else:
+                    initial_domains[(row, col)] = set([1, 2, 3, 4, 5, 6, 7, 8, 9])
         return initial_domains
 
     def get_initial_fc_domains(self, state):
-        initial_domains = [[{1, 2, 3, 4, 5, 6, 7, 8, 9} for i in range(9)] for j in range(9)]
+        initial_domains = self.get_initial_domains(state)
         for row in range(9):
             for col in range(9):
                 var = (row, col)
                 val = state[row][col]
                 if val != 0:
-                    initial_domains[row][col] = {val}
                     self.forward_checking(initial_domains, var, val, {})
         return initial_domains
 
@@ -233,44 +237,59 @@ class Sudoku(object):
         """
         Returns unassigned variable with smallest domain
         """
-        result = (0, 0)
+        results = []
         min_domain_length = 10
         for row in range(9):
             for col in range(9):
-                domain = domains[row][col]
-                if state[row][col] == 0 and len(domain) < min_domain_length:
-                    result = (row, col)
-                    min_domain_length = len(domain)
+                domain = domains[(row, col)]
+                if state[row][col] == 0:
+                    if len(domain) < min_domain_length:
+                        results = [(row, col)]
+                        min_domain_length = len(domain)
+                    if len(domain) == min_domain_length:
+                        results.append((row, col))
+
+        # Most constraining variable as tie break
+        result = (0, 0)
+        max_constraints = -1
+        for var in results:
+            constraints = 0
+            neighbours = self.neighbours_dict[var]
+            # Check number of constraints on var
+            for neighbour in neighbours:
+                row, col = neighbour
+                if state[row][col] == 0:
+                    constraints += 1
+            if constraints > max_constraints:
+                max_constraints = constraints
+                result = var
         return result
 
     """
     Value Heuristics
     """
-    def order_domain_values(self, state, domains, var):
+    def order_domain_values(self, domains, var):
         """
         For now just randomly sort the domain
         """
         if self.value_heuristic == self.RANDOM_SHUFFLE:
-            new_domain = domains[var[self.ROW]][var[self.COL]]
+            new_domain = domains[var]
             random.shuffle(list(new_domain))
             return new_domain
         elif self.value_heuristic == self.LEAST_CONSTRAINING_VAL:
-            return self.least_constraining_value(state, domains, var)
+            return self.least_constraining_value(domains, var)
 
-    def least_constraining_value(self, state, domains, var):
+    def least_constraining_value(self, domains, var):
         """
         Returns domain sorted by least conflicts
         """
-        row, col = var
-        domain = domains[row][col]
+        domain = domains[var]
         sorted_domain = []
-        # Whether we get all neighbours or only unassigned neighbours does not matter to forward checking
-        neighbours = self.get_unassigned_neighbours(var, state, get_all_neighbours=True)
+        neighbours = self.neighbours_dict[var]
         for value in domain:
             conflicts = 0
             for neighbour in neighbours:
-                row, col = neighbour
-                neighbour_domain = domains[row][col]
+                neighbour_domain = domains[neighbour]
                 if value in neighbour_domain:
                     conflicts += 1
             sorted_domain.append((value, conflicts))
@@ -289,39 +308,40 @@ class Sudoku(object):
         if self.inference_heuristic == self.FORWARD_CHECKING:
             return self.forward_checking(domains, var, value, values_removed)
         elif self.inference_heuristic == self.AC3:
-            row, col = var
             new_domains = self.ac3(state, domains, values_removed)
             return new_domains
 
-    def ac3(self, state, domains):
+    def ac3(self, state, domains, values_removed):
         # initialize queue of arcs
         queue = deque()
         unassigned_var = self.get_unassigned_variables(state)
         for x in unassigned_var:
-            neighbours = self.get_unassigned_neighbours(x, state, get_all_neighbours=True)
+            # get unassigned neighbours as well to remove unnecessary iteration of values
+            # that have already been assigned to neighbouring variables
+            neighbours = self.neighbours_dict[x]
             for y in neighbours:
                 queue.append((x, y))
 
         while len(queue) > 0:
             x, y = queue.popleft()
             # print("x: {} y: {}".format(x, y))
-            if self.revise(domains, x, y):
+            if self.revise(domains, x, y, values_removed):
                 # self.print_domains(state, domains)
-                if len(domains[x[self.ROW]][x[self.COL]]) == 0:
+                if len(domains[x]) == 0:
                     # print("({},{})'s domain is gone".format(x[self.ROW], x[self.COL]))
                     return None
-                neighbours = self.get_unassigned_neighbours(x, state, get_all_neighbours=True)
+                neighbours = list(self.neighbours_dict[x])
                 neighbours.remove(y)
                 for neighbour in neighbours:
                     queue.append((neighbour, x))
         return domains
 
-    def revise(self, domains, x, y):
+    def revise(self, domains, x, y, values_removed):
         revised = False
-        x_domain = domains[x[self.ROW]][x[self.COL]]
+        x_domain = domains[x]
         # print("Var {}'s domain: {}".format(x, x_domain))
-        for x_val in set(x_domain):
-            y_domain = domains[y[self.ROW]][y[self.COL]]
+        for x_val in list(x_domain):
+            y_domain = domains[y]
             has_diff_val = False
             for y_val in y_domain:
                 if x_val != y_val:
@@ -329,77 +349,38 @@ class Sudoku(object):
                     break
             if not has_diff_val:
                 x_domain.remove(x_val)
+                if x in values_removed:
+                    values_removed[x].add(x_val)
+                else:
+                    values_removed[x] = {x_val}
                 revised = True
         return revised
 
-    def forward_checking(self, domains, var, value, values_removed):
+    def forward_checking(self, domains, var, value, values_removed, propagated_neighbours=[]):
         """
         Returns the domains of a particular state
         """
-        domains = self.check_row(var, domains, value, values_removed)
-        if domains is None:
-            return None
-        domains = self.check_col(var, domains, value, values_removed)
-        if domains is None:
-            return None
-        domains = self.check_box(var, domains, value, values_removed)
-        if domains is None:
-            return None
+        neighbours = self.neighbours_dict[var]
+        if propagated_neighbours:
+            neighbours = propagated_neighbours
 
-        return domains
-
-    def check_row(self, var, domains, value, values_removed):
-        """
-        Returns the reduced domains after checking row constraints
-        """
-        row, col = var
-        for i in range(9):
-            domain = domains[row][i]
-            if i != col and value in domain:
-                domain.remove(value)
-                if (row, i) not in values_removed:
-                    values_removed[(row, i)] = {value}
-                else:
-                    values_removed[(row, i)].add(value)
-                if len(domain) == 0:
+        for neighbour in neighbours:
+            domain = domains[neighbour]
+            if value in list(domain):
+                if len(domain) == 1:
                     return None
-        return domains
-
-    def check_col(self, var, domains, value, values_removed):
-        """
-        Returns the reduced domains after checking col constraints
-        """
-        row, col = var
-        for i in range(9):
-            domain = domains[i][col]
-            if i != row and value in domain:
                 domain.remove(value)
-                if (i, col) not in values_removed:
-                    values_removed[(i, col)] = {value}
+                if neighbour in values_removed:
+                    values_removed[neighbour].add(value)
                 else:
-                    values_removed[(i, col)].add(value)
-                if len(domain) == 0:
-                    return None
-        return domains
+                    values_removed[neighbour] = set([value])
 
-    def check_box(self, var, domains, value, values_removed):
-        """
-        Returns the reduced domains after checking box constraints
-        """
-        row, col = var
-        box_row = (row // 3) * 3
-        box_col = (col // 3) * 3
-
-        for i in range(box_row, box_row + 3):
-            for j in range(box_col, box_col + 3):
-                domain = domains[i][j]
-                if (i, j) != var and value in domain:
-                    domain.remove(value)
-                    if (i, j) not in values_removed:
-                        values_removed[(i, j)] = {value}
-                    else:
-                        values_removed[(i, j)].add(value)
-                    if len(domain) == 0:
+                # Propagation of singleton domains after removal
+                if len(domain) == 1:
+                    neighbours_to_propagate = list(self.neighbours_dict[neighbour])
+                    neighbours_to_propagate.remove(var)
+                    if self.forward_checking(domains, neighbour, list(domain)[0], values_removed,
+                                             propagated_neighbours=neighbours_to_propagate) is None:
                         return None
 
         return domains
@@ -409,11 +390,14 @@ class Sudoku(object):
         for i in range(9):
             print(state[i])
 
+        sorted_keys = sorted(domains.keys())
+
         print("\nDomains:\n")
         for i in range(9):
             row = ""
             for j in range(9):
-                row += "{:20}".format(str(domains[i][j]))
+                domain = domains[sorted_keys[i*9+j]]
+                row += "{:25}".format(str(domain))
             print(row)
 
     # you may add more classes/functions if you think is useful
