@@ -1,6 +1,7 @@
 import sys
 import random
 from collections import deque
+import time
 
 
 # Running script: given code can be run with the command:
@@ -43,6 +44,7 @@ class Sudoku(object):
         self.count = 0
 
     def solve(self):
+        start = time.time()
         # Build dictionary of neighbours for each variable
         for row in range(9):
             for col in range(9):
@@ -58,6 +60,9 @@ class Sudoku(object):
 
         if ans is None:
             return "Did not solve :("
+
+        end = time.time()
+        print("Time taken: {0}".format(end - start))
 
         return ans
 
