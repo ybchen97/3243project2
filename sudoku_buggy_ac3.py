@@ -39,7 +39,7 @@ class Sudoku(object):
         self.puzzle = puzzle  # self.puzzle is a list of lists
         self.variable_heuristic = self.MOST_CONSTRAINED_VAR
         self.value_heuristic = self.LEAST_CONSTRAINING_VAL
-        self.inference_heuristic = self.FORWARD_CHECKING
+        self.inference_heuristic = self.AC3
         self.neighbours_dict = {}
         self.count = 0
 
@@ -52,7 +52,7 @@ class Sudoku(object):
                 self.neighbours_dict[var] = self.get_unassigned_neighbours(var, [], get_all_neighbours=True)
 
         # Build initial domains
-        domains = self.get_initial_fc_domains(self.puzzle)
+        domains = self.get_initial_domains(self.puzzle)
 
         # self.print_domains(self.puzzle, domains)
         ans = self.run_back_tracking(self.puzzle, domains)
@@ -240,35 +240,16 @@ class Sudoku(object):
 
     def most_constrained_variable(self, state, domains):
         """
-        Returns unassigned variable with smallest domain, with most constraining variable
-        as tie break
+        Returns first unassigned variable with smallest domain
         """
-        results = []
+        result = (0, 0)
         min_domain_length = 10
         for row in range(9):
             for col in range(9):
                 domain = domains[(row, col)]
-                if state[row][col] == 0:
-                    if len(domain) < min_domain_length:
-                        results = [(row, col)]
-                        min_domain_length = len(domain)
-                    if len(domain) == min_domain_length:
-                        results.append((row, col))
-
-        # Most constraining variable as tie break
-        result = (0, 0)
-        max_constraints = -1
-        for var in results:
-            constraints = 0
-            neighbours = self.neighbours_dict[var]
-            # Check number of constraints on var
-            for neighbour in neighbours:
-                row, col = neighbour
-                if state[row][col] == 0:
-                    constraints += 1
-            if constraints > max_constraints:
-                max_constraints = constraints
-                result = var
+                if state[row][col] == 0 and len(domain) < min_domain_length:
+                    result = (row, col)
+                    min_domain_length = len(domain)
         return result
 
     """
@@ -296,7 +277,7 @@ class Sudoku(object):
             conflicts = 0
             for neighbour in neighbours:
                 neighbour_domain = domains[neighbour]
-                if value in neighbour_domain:
+                if value not in neighbour_domain:
                     conflicts += 1
             sorted_domain.append((value, conflicts))
 

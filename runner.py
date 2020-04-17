@@ -35,13 +35,13 @@ if os.path.isfile(output_file):
 f = open(output_file, "w+")
 
 # start a timer
-start = time.time()
+# start = time.time()
 
 # run program
 print("Running {filename} on input{n}.txt".format(filename=filename, n=input_num))
 subprocess.call(["python", filename, input_path, output_file])
-end = time.time()
-print("Completed.\nDuration: {0} seconds".format(round(end-start, 2)))
+# end = time.time()
+# print("Completed.\nDuration: {0} seconds".format(round(end-start, 2)))
 
 # check answer for correctness
 answer_file = open("public_tests_p2_sudoku/output{n}.txt".format(n=input_num),"r")
