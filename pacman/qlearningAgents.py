@@ -65,12 +65,12 @@ class QLearningAgent(ReinforcementAgent):
         "*** YOUR CODE HERE ***"
         if len(self.getLegalActions(state)) == 0:
             return 0.0
-        max_Val = 0;
+        maxVal = None;
         for action in self.getLegalActions(state):
             currValue = self.getQValue(state, action)
-            if currValue > max_Val:
+            if (maxVal is None) or (currValue > maxVal):
                 maxVal = currValue
-        return currValue
+        return maxVal
         
 
     def computeActionFromQValues(self, state):
@@ -85,7 +85,7 @@ class QLearningAgent(ReinforcementAgent):
             max_Val = 0
             for action in self.getLegalActions(state):
                 q_val = self.getQValue(state, action)
-                if q_val > max_Val or max_action is None:
+                if q_val > max_Val or best_action is None:
                     max_Val = q_val
                     best_action = action
         return best_action
@@ -105,7 +105,8 @@ class QLearningAgent(ReinforcementAgent):
         legalActions = self.getLegalActions(state)
         action = None
         "*** YOUR CODE HERE ***"
-        flip = random.randint(0, 1)
+        flip = random.uniform(0, 1)
+        #print(flip)
         if flip <= self.epsilon:
             action = random.choice(legalActions)
         else:
@@ -128,7 +129,7 @@ class QLearningAgent(ReinforcementAgent):
         else:
             sample = reward + (self.discount * max([self.getQValue(nextState, next_action) for next_action in self.getLegalActions(nextState)]))
         second_part = self.alpha * sample
-        self.q_values[(state, action)] = first_part + second_part
+        self.qtable[(state, action)] = first_part + second_part
 
     def getPolicy(self, state):
         return self.computeActionFromQValues(state)
@@ -140,7 +141,7 @@ class QLearningAgent(ReinforcementAgent):
 class PacmanQAgent(QLearningAgent):
     "Exactly the same as QLearningAgent, but with different default parameters"
 
-    def __init__(self, epsilon=0.05,gamma=0.8,alpha=0.2, numTraining=0, **args):
+    def __init__(self, epsilon=0.05,gamma=0.8,alpha=0.2, numTraining=1, **args):
         """
         These default parameters can be changed from the pacman.py command line.
         For example, to change the exploration rate, try:
