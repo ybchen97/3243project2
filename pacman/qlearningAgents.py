@@ -87,7 +87,7 @@ class QLearningAgent(ReinforcementAgent):
         denom = 0.0
         legal_actions = self.getLegalActions(state)
 
-        factor = 0.7
+        factor = 0.95
 
         for action in legal_actions:
             q_val = self.getQValue(state, action)
@@ -101,6 +101,15 @@ class QLearningAgent(ReinforcementAgent):
             action_probabilities.append((action_prob, action))
 
         return util.chooseFromDistribution(action_probabilities)
+
+        # max_q = self.computeValueFromQValues(state)
+        # best_actions = []
+        # for action in self.getLegalActions(state):
+        #     q_val = self.getQValue(state, action)
+        #     if q_val == max_q:
+        #         best_actions.append(action)
+        #
+        # return random.choice(best_actions)
 
     def getAction(self, state):
         """
