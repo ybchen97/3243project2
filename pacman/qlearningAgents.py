@@ -211,17 +211,10 @@ class ApproximateQAgent(PacmanQAgent):
         """
         "*** YOUR CODE HERE ***"
         features = self.featExtractor.getFeatures(state, action)
+        maxValue = self.computeValueFromQValues(nextState)
+        difference = (reward + self.discount * maxValue) - self.getQValue(state, action)
+
         for feature in features:
-            difference = None
-            if (len(self.getLegalActions(nextState))) == 0:
-                difference = reward - self.getQValue(state, action)
-            else:
-                maxValue = None
-                for nextAction in self.getLegalActions(nextState):
-                    QValue = self.getQValue(nextState, nextAction)
-                    if maxValue is None or QValue > maxValue:
-                        maxValue = QValue
-                difference = reward + self.discount * maxValue - self.getQValue(state, action)
             self.weights[feature] += self.alpha * difference * features[feature]
 
     def final(self, state):
