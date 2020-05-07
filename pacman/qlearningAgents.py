@@ -83,16 +83,24 @@ class QLearningAgent(ReinforcementAgent):
         if len(self.getLegalActions(state)) == 0:
             return None
 
-        actions = {}
-        for action in self.getLegalActions(state):
-            actions[action] = self.getQValue(state, action)
+        # Compute probability for each action
+        denom = 0.0
+        legal_actions = self.getLegalActions(state)
 
-        max_val = max(actions.values())
-        best_actions = []
-        for action, q_val in actions.items():
-            if q_val == max_val:
-                best_actions.append(action)
-        return random.choice(best_actions)
+        factor = 0.7
+
+        for action in legal_actions:
+            q_val = self.getQValue(state, action)
+            action_val = math.exp(factor * q_val)
+            denom += action_val
+
+        action_probabilities = []
+        for action in legal_actions:
+            q_val = self.getQValue(state, action)
+            action_prob = math.exp(factor * q_val) / denom
+            action_probabilities.append((action_prob, action))
+
+        return util.chooseFromDistribution(action_probabilities)
 
     def getAction(self, state):
         """
@@ -125,7 +133,7 @@ class QLearningAgent(ReinforcementAgent):
           it will be called on your behalf
         """
         "*** YOUR CODE HERE ***"
-        newQVal = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (reward + (self.discount * self.computeValueFromQValues(nextState)))
+        newQVal = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (reward + self.discount * self.computeValueFromQValues(nextState))
         self.qtable[(state, action)] = newQVal
 
     def getPolicy(self, state):
