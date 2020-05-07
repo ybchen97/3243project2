@@ -80,15 +80,19 @@ class QLearningAgent(ReinforcementAgent):
           you should return None.
         """
         "*** YOUR CODE HERE ***"
-        best_action = None
-        if len(self.getLegalActions(state)) != 0:
-            max_Val = 0
-            for action in self.getLegalActions(state):
-                q_val = self.getQValue(state, action)
-                if q_val > max_Val or best_action is None:
-                    max_Val = q_val
-                    best_action = action
-        return best_action
+        if len(self.getLegalActions(state)) == 0:
+            return None
+
+        actions = {}
+        for action in self.getLegalActions(state):
+            actions[action] = self.getQValue(state, action)
+
+        max_val = max(actions.values())
+        best_actions = []
+        for action, q_val in actions.items():
+            if q_val == max_val:
+                best_actions.append(action)
+        return random.choice(best_actions)
 
     def getAction(self, state):
         """
@@ -105,9 +109,7 @@ class QLearningAgent(ReinforcementAgent):
         legalActions = self.getLegalActions(state)
         action = None
         "*** YOUR CODE HERE ***"
-        flip = random.uniform(0, 1)
-        #print(flip)
-        if flip <= self.epsilon:
+        if util.flipCoin(self.epsilon):
             action = random.choice(legalActions)
         else:
             action = self.computeActionFromQValues(state)
@@ -123,11 +125,7 @@ class QLearningAgent(ReinforcementAgent):
           it will be called on your behalf
         """
         "*** YOUR CODE HERE ***"
-        newQVal = (1 - self.alpha) * self.getQValue(state, action)
-        if len(self.getLegalActions(nextState)) == 0:
-            newQVal =  self.alpha * reward
-        else:
-            newQVal += self.alpha * (reward + (self.discount * max([self.getQValue(nextState, next_action) for next_action in self.getLegalActions(nextState)])))
+        newQVal = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (reward + (self.discount * self.computeValueFromQValues(nextState)))
         self.qtable[(state, action)] = newQVal
 
     def getPolicy(self, state):
