@@ -177,7 +177,7 @@ class NewExtractor(FeatureExtractor):
             # make the distance a number less than one otherwise the update
             # will diverge wildly
             # add a balancing factor to favor chasing ghost instead of food
-            chase_ghost = 0.9
+            chase_ghost = 0.7
             features["closest-scared-ghost"] = (1 - float(scared_ghost_dist) / (walls.width * walls.height)) * chase_ghost
             features["closest-food"] = float(food_dist) / (walls.width * walls.height) * (1 - chase_ghost)
 
@@ -191,10 +191,10 @@ class NewExtractor(FeatureExtractor):
             features["closest-food"] = float(food_dist) / (walls.width * walls.height)
 
         if features["#-of-ghosts-2-step-away"]:
-            neighbours = Actions.getLegalNeighbors((next_x, next_y), walls)
+            # neighbours = Actions.getLegalNeighbors((next_x, next_y), walls)
             for ghost in ghosts:
                 if ghost.getPosition() in two_steps and ghost.scaredTimer > 0:
-                    features["eats-ghost"] = 5.0
+                    features["eats-ghost"] = 3.0
                     break
                 # if ghost.getPosition() in neighbours and ghost.scaredTimer > 0:
                 #     features["eats-ghost"] = 2.0
