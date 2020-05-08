@@ -65,7 +65,7 @@ class QLearningAgent(ReinforcementAgent):
         "*** YOUR CODE HERE ***"
         if len(self.getLegalActions(state)) == 0:
             return 0.0
-        maxVal = None;
+        maxVal = None
         for action in self.getLegalActions(state):
             currValue = self.getQValue(state, action)
             if (maxVal is None) or (currValue > maxVal):
@@ -126,8 +126,23 @@ class QLearningAgent(ReinforcementAgent):
         legalActions = self.getLegalActions(state)
         action = None
         "*** YOUR CODE HERE ***"
-        if util.flipCoin(self.epsilon):
-            action = random.choice(legalActions)
+        if util.flipCoin(0.01):
+            # Compute probability for each action
+            denom = 0.0
+            factor = 0.2
+
+            for action in legalActions:
+                q_val = self.getQValue(state, action)
+                action_val = math.exp(factor * q_val)
+                denom += action_val
+
+            action_probabilities = []
+            for action in legalActions:
+                q_val = self.getQValue(state, action)
+                action_prob = math.exp(factor * q_val) / denom
+                action_probabilities.append((action_prob, action))
+
+            action = util.chooseFromDistribution(action_probabilities)
         else:
             action = self.computeActionFromQValues(state)
         return action
