@@ -84,32 +84,32 @@ class QLearningAgent(ReinforcementAgent):
             return None
 
         # Compute probability for each action
-        denom = 0.0
-        legal_actions = self.getLegalActions(state)
-
-        factor = 0.95
-
-        for action in legal_actions:
-            q_val = self.getQValue(state, action)
-            action_val = math.exp(factor * q_val)
-            denom += action_val
-
-        action_probabilities = []
-        for action in legal_actions:
-            q_val = self.getQValue(state, action)
-            action_prob = math.exp(factor * q_val) / denom
-            action_probabilities.append((action_prob, action))
-
-        return util.chooseFromDistribution(action_probabilities)
-
-        # max_q = self.computeValueFromQValues(state)
-        # best_actions = []
-        # for action in self.getLegalActions(state):
-        #     q_val = self.getQValue(state, action)
-        #     if q_val == max_q:
-        #         best_actions.append(action)
+        # denom = 0.0
+        # legal_actions = self.getLegalActions(state)
         #
-        # return random.choice(best_actions)
+        # factor = 0.95
+        #
+        # for action in legal_actions:
+        #     q_val = self.getQValue(state, action)
+        #     action_val = math.exp(factor * q_val)
+        #     denom += action_val
+        #
+        # action_probabilities = []
+        # for action in legal_actions:
+        #     q_val = self.getQValue(state, action)
+        #     action_prob = math.exp(factor * q_val) / denom
+        #     action_probabilities.append((action_prob, action))
+        #
+        # return util.chooseFromDistribution(action_probabilities)
+
+        max_q = self.computeValueFromQValues(state)
+        best_actions = []
+        for action in self.getLegalActions(state):
+            q_val = self.getQValue(state, action)
+            if q_val == max_q:
+                best_actions.append(action)
+
+        return random.choice(best_actions)
 
     def getAction(self, state):
         """
