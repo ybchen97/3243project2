@@ -80,15 +80,36 @@ class QLearningAgent(ReinforcementAgent):
           you should return None.
         """
         "*** YOUR CODE HERE ***"
-        best_action = None
-        if len(self.getLegalActions(state)) != 0:
-            max_Val = 0
-            for action in self.getLegalActions(state):
-                q_val = self.getQValue(state, action)
-                if q_val > max_Val or best_action is None:
-                    max_Val = q_val
-                    best_action = action
-        return best_action
+        if len(self.getLegalActions(state)) == 0:
+            return None
+
+        # Compute probability for each action
+        # denom = 0.0
+        # legal_actions = self.getLegalActions(state)
+        #
+        # factor = 0.95
+        #
+        # for action in legal_actions:
+        #     q_val = self.getQValue(state, action)
+        #     action_val = math.exp(factor * q_val)
+        #     denom += action_val
+        #
+        # action_probabilities = []
+        # for action in legal_actions:
+        #     q_val = self.getQValue(state, action)
+        #     action_prob = math.exp(factor * q_val) / denom
+        #     action_probabilities.append((action_prob, action))
+        #
+        # return util.chooseFromDistribution(action_probabilities)
+
+        max_q = self.computeValueFromQValues(state)
+        best_actions = []
+        for action in self.getLegalActions(state):
+            q_val = self.getQValue(state, action)
+            if q_val == max_q:
+                best_actions.append(action)
+
+        return random.choice(best_actions)
 
     def getAction(self, state):
         """
@@ -105,9 +126,7 @@ class QLearningAgent(ReinforcementAgent):
         legalActions = self.getLegalActions(state)
         action = None
         "*** YOUR CODE HERE ***"
-        flip = random.uniform(0, 1)
-        #print(flip)
-        if flip <= self.epsilon:
+        if util.flipCoin(self.epsilon):
             action = random.choice(legalActions)
         else:
             action = self.computeActionFromQValues(state)
@@ -123,11 +142,7 @@ class QLearningAgent(ReinforcementAgent):
           it will be called on your behalf
         """
         "*** YOUR CODE HERE ***"
-        newQVal = (1 - self.alpha) * self.getQValue(state, action)
-        if len(self.getLegalActions(nextState)) == 0:
-            newQVal =  self.alpha * reward
-        else:
-            newQVal += self.alpha * (reward + (self.discount * max([self.getQValue(nextState, next_action) for next_action in self.getLegalActions(nextState)])))
+        newQVal = (1 - self.alpha) * self.getQValue(state, action) + self.alpha * (reward + self.discount * self.computeValueFromQValues(nextState))
         self.qtable[(state, action)] = newQVal
 
     def getPolicy(self, state):
@@ -205,17 +220,10 @@ class ApproximateQAgent(PacmanQAgent):
         """
         "*** YOUR CODE HERE ***"
         features = self.featExtractor.getFeatures(state, action)
+        maxValue = self.computeValueFromQValues(nextState)
+        difference = (reward + self.discount * maxValue) - self.getQValue(state, action)
+
         for feature in features:
-            difference = None
-            if (len(self.getLegalActions(nextState))) == 0:
-                difference = reward - self.getQValue(state, action)
-            else:
-                maxValue = None
-                for nextAction in self.getLegalActions(nextState):
-                    QValue = self.getQValue(nextState, nextAction)
-                    if maxValue is None or QValue > maxValue:
-                        maxValue = QValue
-                difference = reward + self.discount * maxValue - self.getQValue(state, action)
             self.weights[feature] += self.alpha * difference * features[feature]
 
     def final(self, state):

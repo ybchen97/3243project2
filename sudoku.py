@@ -39,7 +39,7 @@ class Sudoku(object):
         self.puzzle = puzzle  # self.puzzle is a list of lists
         self.variable_heuristic = self.MOST_CONSTRAINED_VAR
         self.value_heuristic = self.LEAST_CONSTRAINING_VAL
-        self.inference_heuristic = self.FORWARD_CHECKING
+        self.inference_heuristic = self.AC3
         self.neighbours_dict = {}
         self.count = 0
 
@@ -83,23 +83,22 @@ class Sudoku(object):
 
         for value in sorted_domain:
             # print("Value: {}".format(value))
-            if self.is_legal_assignment(value, var, state):
-                state[var_row][var_col] = value
-                # values_removed contains the values that were removed from each variable's domains during inference
-                # Original domains is retrieved by taking the union of this set and the modified domains
-                values_removed = {var: set(domains[var])}
-                domains[var] = set([value])
+            state[var_row][var_col] = value
+            # values_removed contains the values that were removed from each variable's domains during inference
+            # Original domains is retrieved by taking the union of this set and the modified domains
+            values_removed = {var: set(domains[var])}
+            domains[var] = set([value])
 
-                # INFERENCE HEURISTIC HERE
-                # self.inference directly modifies domains
-                if self.inference(state, domains, var, value, values_removed) is not None:
-                    result = self.run_back_tracking(state, domains)
+            # INFERENCE HEURISTIC HERE
+            # self.inference directly modifies domains
+            if self.inference(state, domains, var, value, values_removed) is not None:
+                result = self.run_back_tracking(state, domains)
 
-                    if result is not None:
-                        return result
+                if result is not None:
+                    return result
 
-                # Restore original domains
-                self.restore_domains(domains, values_removed)
+            # Restore original domains
+            self.restore_domains(domains, values_removed)
 
             state[var_row][var_col] = 0
 
@@ -213,7 +212,7 @@ class Sudoku(object):
                 var = (row, col)
                 val = state[row][col]
                 if val != 0:
-                    self.forward_checking(initial_domains, var, val, {})
+                    self.forward_checking(state, initial_domains, var, val, {})
         return initial_domains
 
     """
@@ -312,7 +311,7 @@ class Sudoku(object):
         domains. NOTE: DEEPCOPY THE DOMAIN!!
         """
         if self.inference_heuristic == self.FORWARD_CHECKING:
-            return self.forward_checking(domains, var, value, values_removed)
+            return self.forward_checking(state, domains, var, value, values_removed)
         elif self.inference_heuristic == self.AC3:
             new_domains = self.ac3(state, domains, values_removed)
             return new_domains
@@ -365,7 +364,7 @@ class Sudoku(object):
                 revised = True
         return revised
 
-    def forward_checking(self, domains, var, value, values_removed, propagated_neighbours=[]):
+    def forward_checking(self, state, domains, var, value, values_removed, propagated_neighbours=[]):
         """
         Returns the domains of a particular state
         """
@@ -388,7 +387,7 @@ class Sudoku(object):
                 if len(domain) == 1:
                     neighbours_to_propagate = list(self.neighbours_dict[neighbour])
                     neighbours_to_propagate.remove(var)
-                    if self.forward_checking(domains, neighbour, list(domain)[0], values_removed,
+                    if self.forward_checking(state, domains, neighbour, list(domain)[0], values_removed,
                                              propagated_neighbours=neighbours_to_propagate) is None:
                         return None
 
